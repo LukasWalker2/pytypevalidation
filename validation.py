@@ -1,9 +1,8 @@
-from typing import Type, Union, Optional, List
-
+from typing import Type, Union, Optional, List, Dict, Literal
 def satisfies(value, form) -> bool:
     if isinstance(form, Type):
         return isinstance(value, form)
-    elif hasattr(form, "__origin__"):
+    if hasattr(form, "__origin__"):
         if form.__origin__ == Union:
             types = form.__args__
             return any(satisfies(value, t) for t in types)
@@ -16,6 +15,18 @@ def satisfies(value, form) -> bool:
         elif form.__origin__ == Optional:
             inner_type = form.__args__[0]
             return value is None or satisfies(value, inner_type)
+        elif form.__origin__ == dict:
+            key_type, value_type = form.__args__
+            if not isinstance(value, dict):
+                return False
+            for k, v in value.items():
+                if not satisfies(k, key_type):
+                    return False
+                if not satisfies(v, value_type):
+                    return False
+            return True
+        elif form.__origin__ == Literal:
+            return value in form.__args__
     else:
         raise TypeError("Unsupported type form")
 
