@@ -44,9 +44,9 @@ class Constraint:
 
 def satisfies(value, form, strict=False) -> bool:
     if isinstance(form, Type):
+        #print(form, value, isinstance(value, form))
         return isinstance(value, form)
     if isinstance(form, Constraint):
-        print(form, value)
         return form.is_satisfied(value)
     if hasattr(form, "__origin__"):
         if form.__origin__ == Union:
@@ -78,7 +78,7 @@ def satisfies(value, form, strict=False) -> bool:
             res = validate(value, form.schema, strict=strict) 
         except:
             return False
-        return res
+        return True
     else:
         raise TypeError("Unsupported type form")
 
@@ -89,19 +89,20 @@ def validate(instance: dict, form: dict, strict: bool) -> dict:
 
     validated_instance = {}
     
-    # Validate each field in the schema
+
     for key, schema_val in form.items():
         if not isinstance(schema_val, dict) or 'type' not in schema_val:
-            # Ignore non-type keys (like functions or literals)
             continue
-
+        
+        value = instance.get(key)
         field_type = schema_val['type']
         default = schema_val.get('default')
 
-        if key in instance:
-            if not satisfies(instance[key], field_type, strict=strict):
+        if key in instance or strict:
+            if not satisfies(instance.get(key), field_type, strict=strict):
                 raise TypeError(f"Field '{key}' does not satisfy type {field_type}")
-            validated_instance[key] = instance[key]
+            if value != None:
+                validated_instance[key] = instance[key]
         else:
             if default is not None:
                 validated_instance[key] = default
@@ -113,6 +114,7 @@ def validate(instance: dict, form: dict, strict: bool) -> dict:
                 raise ValueError(f"Field '{key}' is not in the scheme")
 
     return validated_instance
+
 
 if __name__ == '__main__':
 
