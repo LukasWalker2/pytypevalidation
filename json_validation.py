@@ -51,11 +51,11 @@ def satisfies(value, form, strict=False) -> bool:
     if hasattr(form, "__origin__"):
         if form.__origin__ == Union:
             types = form.__args__
-            return any(satisfies(value, t) for t in types)
+            return any(satisfies(value, t, strict=strict) for t in types)
         elif form.__origin__ == list:
             inner_type = form.__args__[0]
             if isinstance(value, list):
-                return all(satisfies(v, inner_type) for v in value)
+                return all(satisfies(v, inner_type, strict=strict) for v in value)
             else:
                 return False
         elif form.__origin__ == Optional:
@@ -66,28 +66,32 @@ def satisfies(value, form, strict=False) -> bool:
             if not isinstance(value, dict):
                 return False
             for k, v in value.items():
-                if not satisfies(k, key_type):
+                if not satisfies(k, key_type, strict=strict):
                     return False
-                if not satisfies(v, value_type):
+                if not satisfies(v, value_type, strict=strict):
                     return False
             return True
         elif form.__origin__ == Literal:
             return value in form.__args__
     elif isinstance(form, Scheme):
-        return validate(value, form.schema, strict=strict) is not None
+        try:
+            res = validate(value, form.schema, strict=strict) 
+        except:
+            return False
+        return res
     else:
         raise TypeError("Unsupported type form")
 
 
 def validate(instance: dict, form: dict, strict: bool) -> dict:
     if not isinstance(instance, dict):
-        raise TypeError("Instance must be a dictionary")
+        return False
 
     validated_instance = {}
     
     # Validate each field in the schema
     for key, schema_val in form.items():
-        if 'type' not in schema_val:
+        if not isinstance(schema_val, dict) or 'type' not in schema_val:
             # Ignore non-type keys (like functions or literals)
             continue
 
@@ -215,7 +219,7 @@ if __name__ == '__main__':
         instance = {
             'legend': True,
             'xlim': [0],  # This should fail the '>= 2' constraint
-            'xlim_length': "",
+            'xlim_length': [0,1,2,3],
             'annotation': {
                 'text': 'Example',
                 'xy': [1, 2]
@@ -226,7 +230,7 @@ if __name__ == '__main__':
             'legend': {'type': bool, 'default': False},
             'xlim': {'type': Optional[List[int]], 'default': None},
             'annotation': {'type': Scheme(annotation_schema), 'default': {}},
-            'xlim_length': {'type': Union[Constraint(list, '>', 10), str], 'default': None}  # Expect xlim to have at least 2 elements
+            'xlim_length': {'type': Union[Constraint(list, '>', 10), str], 'default': None}  # Failing constraint
         }
     
         try:
