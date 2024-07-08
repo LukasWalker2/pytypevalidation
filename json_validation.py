@@ -1,20 +1,32 @@
 from typing import Type, Union, Optional, List, Dict, Literal    
 
-class Scheme:
+class Scheme(type):
+    '''
+    Der Scheme type erlaubt es in einem definierten JSON Schema weitere JSON Schemata
+    als Typ eines attributs festzulegen
+    '''
     def __init__(self, schema: dict):
         self.schema = schema
         
     def __str__(self):
         return f'Schema: {str(self.schema)}'
+    
+    def __new__(cls,*args, **kwargs):
+        klass = super().__new__(cls, "Scheme", (), {})
+        return klass
 
-class Constraint:
+class Constraint(type):
+    '''
+    Der Contraint type erlaubt es in Typdeklerationen die Werte die typen einnehmen können
+    einzuschränken
+    '''
     def __init__(self, constraint_type: Type, operator: str, value):
         self.constraint_type = constraint_type
         self.operator = operator
         self.value = value
 
     def is_satisfied(self, value):
-        if not isinstance(value, self.constraint_type):
+        if not satisfies(value, self.constraint_type):
             return False
         # Check if the type is iterable
         is_iterable =  hasattr(value,'__len__')
@@ -39,12 +51,18 @@ class Constraint:
         
     def __str__(self):
         return f'Constraint: type={self.constraint_type} op={self.operator} value={self.value}'
+    
+    def __new__(cls,*args, **kwargs):
+        klass = super().__new__(cls, "Constraint", (), {})
+        return klass
 
 
 
 def satisfies(value, form, strict=False) -> bool:
-    if isinstance(form, Type):
-        #print(form, value, isinstance(value, form))
+    '''
+    Die satisfies funktion erlaubt es 
+    '''
+    if isinstance(form, Type) and not isinstance(form, (Constraint, Scheme)):
         return isinstance(value, form)
     if isinstance(form, Constraint):
         return form.is_satisfied(value)
@@ -74,8 +92,11 @@ def satisfies(value, form, strict=False) -> bool:
         elif form.__origin__ == Literal:
             return value in form.__args__
     elif isinstance(form, Scheme):
+        if value is None:
+            return False
         try:
             res = validate(value, form.schema, strict=strict) 
+            value.update(res)
         except:
             return False
         return True
@@ -103,9 +124,9 @@ def validate(instance: dict, form: dict, strict: bool) -> dict:
                 raise TypeError(f"Field '{key}' does not satisfy type {field_type}")
             if value != None:
                 validated_instance[key] = instance[key]
-        else:
-            if default is not None:
-                validated_instance[key] = default
+
+        if key not in instance and default is not None:
+            validated_instance[key] = default
 
     # Check for extra fields in the instance if strict mode is on
     if strict:
@@ -115,132 +136,18 @@ def validate(instance: dict, form: dict, strict: bool) -> dict:
 
     return validated_instance
 
-
 if __name__ == '__main__':
-
-
-    annotation_schema = {
-        'text': {'type': str, 'default': ''},
-        'xy': {'type': list, 'default': [0, 0]},
-        'xytext': {'type': list, 'default': None},
-        'arrowprops': {
-            'type': dict,
-            'default': {
-                'facecolor': 'black',
-                'arrowstyle': '->',
-            }
-        }
+    #print(Constraint(int, '==', 1).is_satisfied(1))
+    scheme = {
+        'lol': {'type': Union[str, bool], 'default': None},
+        'lel' : {'type':Optional[str], 'default': 'haha'}
     }
 
-    # Gemeinsame Optionen für alle Plots
-    common_options = {
-        'legend': {'type': bool, 'default': False},
-        'xlim': {'type': Optional[List[int]], 'default': None},
-        'ylim': {'type': Optional[List[int]], 'default': None},
-        'xticks': {'type': Optional[List[int]], 'default': None},
-        'yticks': {'type': Optional[List[int]], 'default': None},
-        'grid': {'type': bool, 'default': False},
-        'annotations': {'type': list, 'default': []},
-        'label': {'type': str, 'default': False}
-    }
+    form = {
+            'test' : {'type': Union[Constraint(Union[int,float], '==', 1), bool, Literal['a','b']], 'default': "test"},
+            'tesat': {'type': Scheme(scheme), 'default': 'oo'}
+            }
 
-    # Dictionary für die Spezifikationen der Plot-Typen
-    plot_specifications = {
-        'plot': {
-            **common_options,
-            'plotter': lambda axe: getattr(axe, 'plot'),
-            'options': {
-                'color': {'type': Optional[str], 'default': 'black'},
-                'linestyle': {'type': Optional[str], 'default': '-'},
-                'marker': {'type': Optional[str], 'default': 'o'}
-            },
-            'data': {
-                'x': {'type': list, 'default': []},
-                'y': {'type': list, 'default': []}
-            },
-            'annotation':  {'type': Scheme(annotation_schema), 'default': {}}
-        },
-        'scatter': {
-            **common_options,
-            'plotter': lambda axe: getattr(axe, 'scatter'),
-            'options': {
-                's': {'type': Optional[Union[list, float]], 'default': 20},
-                'c': {'type': Optional[Union[list, str]], 'default': 'blue'},
-                'marker': {'type': Optional[str], 'default': 'o'},
-                'cmap': {'type': Optional[dict], 'default': None},
-                'alpha': {'type': Optional[float], 'default': 1.0},
-                'linewidths': {'type': Optional[float], 'default': 1.0}
-            },
-            'data': {
-                'x': {'type': list, 'default': []},
-                'y': {'type': list, 'default': []}
-            }
-        },
-        'bar': {
-            **common_options,
-            'plotter': lambda axe: getattr(axe, 'bar'),
-            'options': {
-                'width': {'type': Optional[float], 'default': 0.8},
-                'bottom': {'type': Optional[list], 'default': None},
-                'align': {'type': Optional[str], 'default': 'center'},
-                'color': {'type': Optional[Union[list, str]], 'default': 'blue'},
-                'edgecolor': {'type': Optional[Union[list, str]], 'default': 'black'},
-                'linewidth': {'type': Optional[float], 'default': 1.0},
-                'tick_label': {'type': Optional[list], 'default': None}
-            },
-            'data': {
-                'x': {'type': list, 'default': []},
-                'height': {'type': list, 'default': []}
-            }
-        }
-    }
-    
 
-    def test_constraint_success():
-        instance = {
-            'legend': True,
-            'xlim': [0, 10],
-            'xlim_length': [1,2],
-            'annotation': {
-                'text': 'Example',
-                'xy': [1, 2],
-            }
-        }
-    
-        schema = {
-            'legend': {'type': bool, 'default': False},
-            'xlim': {'type': Optional[List[int]], 'default': None},
-            'annotation': {'type': Scheme(annotation_schema), 'default': {}},
-            'xlim_length': {'type': Constraint(list, '>=', 2), 'default': None}  # Expect xlim to have at least 2 elements
-        }
-    
-        validated = validate(instance, schema, strict=False)
-        print("Validated (success with constraint):", validated)
-    
-    def test_constraint_failure():
-        instance = {
-            'legend': True,
-            'xlim': [0],  # This should fail the '>= 2' constraint
-            'xlim_length': [0,1,2,3],
-            'annotation': {
-                'text': 'Example',
-                'xy': [1, 2]
-            }
-        }
-    
-        schema = {
-            'legend': {'type': bool, 'default': False},
-            'xlim': {'type': Optional[List[int]], 'default': None},
-            'annotation': {'type': Scheme(annotation_schema), 'default': {}},
-            'xlim_length': {'type': Union[Constraint(list, '>', 10), str], 'default': None}  # Failing constraint
-        }
-    
-        try:
-            validated = validate(instance, schema, strict=True)
-            print(validated)
-        except TypeError as e:
-            print("Validation error (failure with constraint):", e)
-    
-    test_constraint_success()
-    test_constraint_failure()
-    
+    lol = validate({'test': "a", 'tesat': {'lol':True}}, form, strict = True)
+    print(lol)
