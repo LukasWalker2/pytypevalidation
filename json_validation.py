@@ -1,5 +1,4 @@
-from typing import Type, Union, Optional, List, Dict, Literal, get_type_hints
-import time
+from typing import Type, Union, Optional, Literal, get_type_hints, List
 
 class SchemeMeta(type):
     def __getitem__(cls, args):
@@ -109,6 +108,8 @@ def satisfies(value, form, strict=False) -> bool:
         elif form.__origin__ == list:
             inner_type = form.__args__[0]
             if isinstance(value, list):
+                if not value:
+                    value = [None]
                 return all(satisfies(v, inner_type, strict=strict) for v in value)
             else:
                 return False
@@ -178,17 +179,34 @@ if __name__ == '__main__':
         'lol': {'type': Union[str, bool], 'default': None},
         'lel' : {'type':Optional[str], 'default': 'haha'}
     }
+    
+    scheme2 = {
+        'a': {'type': Union[str, bool], 'default': None},
+        'b' : {'type':Optional[str], 'default': 'haha'}
+    }
+
 
     form = {
             'test' : {'type': Union[Constraint[Constraint[Union[int,float], '<', 10], '>', 1], bool, Literal['a','b']], 'default': "test"},
-            'tesat': {'type': Scheme[scheme], 'default': 'oo'}
+            'tesat': {'type': Union[Scheme[scheme], Scheme[scheme2]], 'default': 'oo'}
             }
 
-    lol = validate({'test': 9, 'tesat': {'lol':True}}, form, strict = True)
+    lol = validate({'test': 9, 'tesat': {'a':True}}, form, strict = True)
     print(lol)
 
     @typed
     def foo(x : Union[Constraint[int, '<=',10], str]) -> Union[Constraint[int, '<=',10], str]:
         return x
     
-    print(foo(11))
+    print(foo(9))
+    
+    
+    HOST_DICT = {
+        "host": {"type": str},
+        "cert_path" : {"type": str},
+    	"key_path" : {"type": str}
+    }
+
+    HOST_SCHEME = Union[str, List[Scheme[HOST_DICT]]]
+
+    print(satisfies([{"host":"bbwebservice.eu", "cert_path": "tath", "key_path":"path"},{"host":"bbwebservice.eu", "cert_path": "tath", "key_path":"path"}], HOST_SCHEME, True))
